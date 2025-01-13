@@ -7,7 +7,7 @@ if len(sys.argv) > 1:
     base_model = sys.argv[1]
     model_name = sys.argv[2]
 else:
-    base_model = model_name = 'meta-llama/Llama-2-7b-hf'
+    base_model = model_name = 'meta-llama/Llama-2-7b-chat-hf'
 
 def load_tokenizer_model(model_name):
     print(f"===== Base model: {base_model}")
