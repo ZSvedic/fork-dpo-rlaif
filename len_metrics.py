@@ -7,7 +7,7 @@ if len(sys.argv) > 1:
     base_model = sys.argv[1]
     model_name = sys.argv[2]
 else:
-    base_model = model_name = 'unsloth/zephyr-sft-bnb-4bit'
+    base_model = model_name = 'meta-llama/Llama-2-7b-hf'
 
 def load_tokenizer_model(model_name):
     print(f"===== Base model: {base_model}")
@@ -15,11 +15,12 @@ def load_tokenizer_model(model_name):
 
     # Load model in 2 steps: base first, then checkpoint
     model = hftf.AutoModelForCausalLM.from_pretrained(base_model, device_map="balanced")
-    tokenizer = hftf.AutoTokenizer.from_pretrained(base_model)
+    tokenizer = hftf.AutoTokenizer.from_pretrained(base_model, padding_side="left")
     tokenizer.pad_token_id = tokenizer.eos_token_id
-    checkpoint_path = os.path.join(model_name, "policy.pt")
-    state_dict = torch.load(checkpoint_path, map_location="cpu")
-    model.load_state_dict(state_dict['state'])
+    if model_name!=base_model:
+        checkpoint_path = os.path.join(model_name, "policy.pt")
+        state_dict = torch.load(checkpoint_path, map_location="cpu")
+        model.load_state_dict(state_dict['state'])
 
     print(f'Allocated GPU memory: {torch.cuda.memory_allocated() / (1024*1024):,.1f} MB')
 
@@ -65,8 +66,8 @@ def calc_model_avg_len(tokenizer, model):
     sequences = tokenizer.batch_decode(results[:, inputs_tok_len:], skip_special_tokens=True)
 
     averages = []
-    for answer in sequences:
-        print(answer)
+    for p, answer in zip(prompts, sequences):
+        print(f"PROMPT: {p}\nANSWER: {answer}")
         print('------------------------------------------------------------------------------------')
         averages.append(len(answer))
 
