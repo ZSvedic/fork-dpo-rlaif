@@ -1,4 +1,4 @@
-name_or_path: meta-llama/Llama-3.1-8B-Instruct
+name_or_path: meta-llama/Llama-2-7b-chat-hf
 tokenizer_name_or_path: null
 archive: null
 block_name: LlamaDecoderLayer
