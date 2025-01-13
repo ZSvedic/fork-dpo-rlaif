@@ -23,7 +23,7 @@ def load_tokenizer_model(model_name):
     tokenizer.pad_token_id = tokenizer.eos_token_id
     if model_name!=base_model:
         checkpoint_path = os.path.join(model_name, "policy.pt")
-        state_dict = torch.load(checkpoint_path, map_location="cuda:0")
+        state_dict = torch.load(checkpoint_path, map_location="cpu")
         model.load_state_dict(state_dict['state'])
 
     print(f'Allocated GPU memory: {torch.cuda.memory_allocated() / (1024*1024):,.1f} MB')
@@ -88,11 +88,16 @@ model.eval()
 avg_len = calc_model_avg_len(tokenizer, model)
 
 if mode=="upload":
+    # Save model locally
+    save_path = "./CACHE/saved_model"
+    model.save_pretrained(save_path)
+    tokenizer.save_pretrained(save_path)
+    # Save to HF
     model_str = base_model.split('/')[1]
     repo_id = f"ZSvedic/dpo-rlaif-{model_str}-len{int(avg_len)}-{time.strftime('%Y-%m-%d-%H-%M')}"
     huggingface_hub.create_repo(repo_id, exist_ok=True)
     huggingface_hub.upload_folder(
-        folder_path=loc_peft_model,
+        folder_path=save_path,
         path_in_repo=".",
         repo_id=repo_id,
         commit_message="Add fine-tuned model"
