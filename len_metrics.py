@@ -2,11 +2,15 @@ import torch
 import transformers as hftf
 import sys
 import os
+import time
+import huggingface_hub
 
 if len(sys.argv) > 1:
-    base_model = sys.argv[1]
-    model_name = sys.argv[2]
+    mode = sys.argv[1]
+    base_model = sys.argv[2]
+    model_name = sys.argv[3]
 else:
+    mode = "evaluate"
     base_model = model_name = 'meta-llama/Llama-2-7b-chat-hf'
 
 def load_tokenizer_model(model_name):
@@ -14,12 +18,12 @@ def load_tokenizer_model(model_name):
     print(f"===== Model: {model_name}")
 
     # Load model in 2 steps: base first, then checkpoint
-    model = hftf.AutoModelForCausalLM.from_pretrained(base_model, device_map="balanced")
+    model = hftf.AutoModelForCausalLM.from_pretrained(base_model, device_map="cuda:0")
     tokenizer = hftf.AutoTokenizer.from_pretrained(base_model, padding_side="left")
     tokenizer.pad_token_id = tokenizer.eos_token_id
     if model_name!=base_model:
         checkpoint_path = os.path.join(model_name, "policy.pt")
-        state_dict = torch.load(checkpoint_path, map_location="cpu")
+        state_dict = torch.load(checkpoint_path, map_location="cuda:0")
         model.load_state_dict(state_dict['state'])
 
     print(f'Allocated GPU memory: {torch.cuda.memory_allocated() / (1024*1024):,.1f} MB')
@@ -56,7 +60,7 @@ def calc_model_avg_len(tokenizer, model):
     prompts = [tokenizer.apply_chat_template(m, add_generation_prompt=True, tokenize=False)
             for m in messages]
 
-    inputs = tokenizer(prompts, return_tensors='pt', padding=True).to('cuda')
+    inputs = tokenizer(prompts, return_tensors='pt', padding=True).to('cuda:0')
     inputs_tok_len = inputs["input_ids"].shape[1]
     # print(inputs_tok_len)
 
@@ -80,6 +84,18 @@ def calc_model_avg_len(tokenizer, model):
 tokenizer, model = load_tokenizer_model(model_name)
 model.eval()
 
-# Then run the verbosity test:
-avg_len_before = calc_model_avg_len(tokenizer, model)
-print(avg_len_before)
+# Then evaluate and run the mode:
+avg_len = calc_model_avg_len(tokenizer, model)
+
+if mode=="upload":
+    model_str = base_model.split('/')[1]
+    repo_id = f"ZSvedic/dpo-rlaif-{model_str}-len{int(avg_len)}-{time.strftime('%Y-%m-%d-%H-%M')}"
+    huggingface_hub.create_repo(repo_id, exist_ok=True)
+    huggingface_hub.upload_folder(
+        folder_path=loc_peft_model,
+        path_in_repo=".",
+        repo_id=repo_id,
+        commit_message="Add fine-tuned model"
+    )
+elif mode!="evaluate":
+    print(f"ERROR: Mode needs to be evaluate or upload, there is no mode {mode}")
